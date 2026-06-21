@@ -1,7 +1,7 @@
 import requests
 import time
 from power_sampler import PowerSampler
-
+from database import init_db, log_query, get_session_stats
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
 # Cloud CO₂ estimates per token (grams)
@@ -109,46 +109,55 @@ def run_tracked_query(prompt, local_model="deepseek-r1:1.5b"):
     print("="*54 + "\n")
 
     # ── Return full data for future database logging ──
-    return {
+    query_data = {
         "prompt": prompt,
         "model": local_model,
         "tokens": tokens,
+        "tokens_prompt": result["tokens_prompt"],
         "wall_time_s": wall_time,
+        "tokens_per_sec": round(tokens / wall_time, 1) if wall_time > 0 else 0,
         "avg_watts": power_stats["avg_watts"],
         "peak_watts": power_stats["peak_watts"],
         "watt_hours": power_stats["watt_hours"],
         "co2_local_g": local_co2,
         "co2_gpt4o_g": cloud_comparisons["gpt-4o"],
+        "co2_claude_g": cloud_comparisons["claude-sonnet"],
+        "co2_gemini_g": cloud_comparisons["gemini-pro"],
         "co2_saved_g": co2_saved,
         "response": result["response"]
     }
 
+    # ── Auto-save to database ──
+    row_id = log_query(query_data)
+    print(f"  💾 Saved to database (ID: {row_id})")
+
+    return query_data
+
 
 # ── RUN 2 PROMPTS SO YOU SEE THE DIFFERENCE ──────────
+# REPLACE WITH
 if __name__ == "__main__":
+
+    # Make sure DB is ready before anything runs
+    init_db()
 
     queries = [
         "What is artificial intelligence? Answer in 3 sentences.",
         "Write a Python function to check if a number is prime. Explain each line."
     ]
 
-    all_results = []
-
     for prompt in queries:
-        result = run_tracked_query(prompt)
-        if result:
-            all_results.append(result)
-        time.sleep(2)  # Let GPU cool to idle between queries
+        run_tracked_query(prompt)
+        time.sleep(2)
 
-    # ── Session summary ──
-    if all_results:
-        total_co2 = round(sum(r["co2_local_g"] for r in all_results), 4)
-        total_saved = round(sum(r["co2_saved_g"] for r in all_results), 4)
-        total_tokens = sum(r["tokens"] for r in all_results)
-        print("="*54)
-        print("  📊 SESSION SUMMARY")
-        print(f"  Queries run      : {len(all_results)}")
-        print(f"  Total tokens     : {total_tokens}")
-        print(f"  Total CO₂ local  : {total_co2} g")
-        print(f"  Total CO₂ saved  : {total_saved} g vs cloud")
-        print("="*54)
+    # ── Pull lifetime stats straight from DB ──
+    stats = get_session_stats()
+    print("="*54)
+    print("  📊 LIFETIME STATS (all queries ever run)")
+    print(f"  {'Total queries':<22}: {stats['total_queries']}")
+    print(f"  {'Total tokens':<22}: {stats['total_tokens']}")
+    print(f"  {'Total CO₂ local':<22}: {stats['total_co2_local']} g")
+    print(f"  {'Total CO₂ saved':<22}: {stats['total_co2_saved']} g")
+    print(f"  {'Avg GPU watts':<22}: {stats['avg_watts']} W")
+    print(f"  {'Avg tokens/sec':<22}: {stats['avg_tokens_per_sec']}")
+    print("="*54)
