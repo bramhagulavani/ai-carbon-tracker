@@ -2,7 +2,7 @@
 
 > Measures and compares the **real energy cost** of running AI models locally (Ollama + RTX 4050) versus cloud APIs (GPT-4o, Claude, Gemini) — with a live D3.js dashboard.
 
-Built by **Bramha Vinayak Gulavani** — CSE (AI & ML), VIT Pune | Class Representative
+Built by **Bramha Vinayak Gulavani** — CSE (AI & ML), VIT Pune.
 
 ---
 
