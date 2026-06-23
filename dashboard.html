@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>⚡ AI Carbon Footprint Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --text:     #e8eaf0;
+      --muted:    #7b8099;
+      --green:    #1db954;
+      --green-dim:#0d4a22;
+      --amber:    #f59e0b;
+      --coral:    #ef4444;
+      --blue:     #3b82f6;
+      --purple:   #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-left h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+    .header-left p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--green);
+      color: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+    .refresh-btn {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .refresh-btn:hover { border-color: var(--green); }
+
+    /* ── Stat cards ── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      transition: border-color 0.2s;
+    }
+    .stat-card:hover { border-color: var(--muted); }
+    .stat-val {
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+    .stat-label { font-size: 12px; color: var(--muted); }
+    .c-green  { color: var(--green); }
+    .c-amber  { color: var(--amber); }
+    .c-coral  { color: var(--coral); }
+    .c-blue   { color: var(--blue);  }
+    .c-purple { color: var(--purple);}
+
+    /* ── Charts row ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 780px) {
+      .charts-row { grid-template-columns: 1fr; }
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .chart-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── D3 SVG styles ── */
+    .axis text { fill: var(--muted); font-size: 11px; }
+    .axis line, .axis path { stroke: var(--border); }
+    .grid line { stroke: var(--border); stroke-dasharray: 3 3; }
+    .tooltip {
+      position: fixed;
+      background: #252836;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      line-height: 1.7;
+      z-index: 999;
+    }
+
+    /* ── Query prompt input ── */
+    .query-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+    }
+    .query-card .chart-title { margin-bottom: 12px; }
+    .query-row { display: flex; gap: 10px; }
+    .query-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 14px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .query-input:focus { border-color: var(--green); }
+    .query-select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .run-btn {
+      background: var(--green);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .run-btn:hover:not(:disabled) { opacity: 0.85; }
+    .status-msg {
+      font-size: 12px;
+      color: var(--amber);
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
+    /* ── History table ── */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 0 12px 10px 0;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    td {
+      padding: 10px 12px 10px 0;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { color: var(--text); }
+    .model-tag {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      border: 1px solid var(--green);
+      color: var(--green);
+      white-space: nowrap;
+    }
+    .saved-val { color: var(--green); font-weight: 500; }
+    .local-val { color: var(--amber); }
+    .prompt-cell {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <h1>⚡ AI Carbon Footprint Tracker</h1>
+    <p>Measures real energy cost of local LLM inference vs cloud AI • RTX 4050 • Ollama</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="badge">● LIVE</span>
+    <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+  </div>
+</div>
+
+<!-- Stat cards -->
+<div class="stat-grid" id="stat-grid">
+  <div class="stat-card"><div class="stat-val c-blue" id="s-queries">—</div><div class="stat-label">Total queries run</div></div>
+  <div class="stat-card"><div class="stat-val c-purple" id="s-tokens">—</div><div class="stat-label">Total tokens generated</div></div>
+  <div class="stat-card"><div class="stat-val c-amber" id="s-co2">—g</div><div class="stat-label">CO₂ produced (local)</div></div>
+  <div class="stat-card"><div class="stat-val c-green" id="s-saved">—g</div><div class="stat-label">CO₂ saved vs cloud</div></div>
+  <div class="stat-card"><div class="stat-val c-coral" id="s-watts">—W</div><div class="stat-label">Avg GPU power draw</div></div>
+  <div class="stat-card"><div class="stat-val c-blue" id="s-tps">—</div><div class="stat-label">Avg tokens / second</div></div>
+</div>
+
+<!-- Run a query live -->
+<div class="query-card">
+  <div class="chart-title">Run a query & track it live</div>
+  <div class="query-row">
+    <input class="query-input" id="prompt-input" type="text"
+      placeholder="Type any prompt — e.g. Explain neural networks in simple words" />
+    <select class="query-select" id="model-select">
+      <option value="deepseek-r1:1.5b">DeepSeek R1 1.5B</option>
+      <option value="deepseek-r1:7b">DeepSeek R1 7B</option>
+      <option value="llama3.2">Llama 3.2</option>
+      <option value="mistral">Mistral 7B</option>
+    </select>
+    <button class="run-btn" id="run-btn" onclick="runQuery()">▶ Run</button>
+  </div>
+  <div class="status-msg" id="status-msg"></div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+  <div class="chart-card">
+    <div class="chart-title">Local CO₂ vs Cloud — per query (grams)</div>
+    <svg id="bar-chart"></svg>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">CO₂ breakdown — latest query</div>
+    <svg id="donut-chart"></svg>
+  </div>
+</div>
+
+<!-- History table -->
+<div class="table-card">
+  <div class="chart-title" style="margin-bottom:14px;">Query history</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Model</th>
+        <th>Prompt</th>
+        <th>Tokens</th>
+        <th>Avg W</th>
+        <th>Wh</th>
+        <th>CO₂ local</th>
+        <th>CO₂ GPT-4o</th>
+        <th>💚 Saved</th>
+        <th>Time (s)</th>
+        <th>tok/s</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody id="history-body"></tbody>
+  </table>
+</div>
+
+<script>
+const API = 'http://localhost:5000';
+const tooltip = document.getElementById('tooltip');
+
+// ── Fetch and render everything ──────────────────────
+async function loadAll() {
+  try {
+    const [stats, hist] = await Promise.all([
+      fetch(`${API}/stats`).then(r => r.json()),
+      fetch(`${API}/history`).then(r => r.json())
+    ]);
+    renderStats(stats);
+    renderBarChart(hist.queries);
+    renderDonut(hist.queries[0]);
+    renderTable(hist.queries);
+  } catch(e) {
+    document.getElementById('status-msg').textContent =
+      '⚠ Cannot reach API — make sure python app.py is running';
+  }
+}
+
+// ── Stat cards ───────────────────────────────────────
+function renderStats(s) {
+  document.getElementById('s-queries').textContent = s.total_queries;
+  document.getElementById('s-tokens').textContent  = s.total_tokens.toLocaleString();
+  document.getElementById('s-co2').textContent     = s.total_co2_local + 'g';
+  document.getElementById('s-saved').textContent   = s.total_co2_saved + 'g';
+  document.getElementById('s-watts').textContent   = s.avg_watts + 'W';
+  document.getElementById('s-tps').textContent     = s.avg_tokens_per_sec + ' tok/s';
+}
+
+// ── Bar chart ────────────────────────────────────────
+function renderBarChart(queries) {
+  const el = document.getElementById('bar-chart');
+  el.innerHTML = '';
+  if (!queries || !queries.length) return;
+
+  const data = [...queries].reverse().slice(-8); // last 8
+  const W = el.parentElement.clientWidth - 40;
+  const H = 220;
+  const margin = { top: 10, right: 10, bottom: 60, left: 44 };
+  const iW = W - margin.left - margin.right;
+  const iH = H - margin.top - margin.bottom;
+
+  const svg = d3.select('#bar-chart')
+    .attr('width', W).attr('height', H);
+
+  const g = svg.append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const keys   = ['co2_local_g','co2_gpt4o_g','co2_claude_g','co2_gemini_g'];
+  const colors = ['#1db954','#ef4444','#f59e0b','#3b82f6'];
+  const labels = ['Local','GPT-4o','Claude','Gemini'];
+
+  const x0 = d3.scaleBand()
+    .domain(data.map((_,i) => i))
+    .range([0, iW]).paddingInner(0.3);
+
+  const x1 = d3.scaleBand()
+    .domain(d3.range(keys.length))
+    .range([0, x0.bandwidth()]).padding(0.08);
+
+  const maxVal = d3.max(data, d => d3.max(keys, k => d[k]));
+  const y = d3.scaleLinear().domain([0, maxVal * 1.1]).range([iH, 0]);
+
+  // Grid
+  g.append('g').attr('class','grid')
+    .call(d3.axisLeft(y).ticks(4).tickSize(-iW).tickFormat(''));
+
+  // Bars
+  const groups = g.selectAll('.group')
+    .data(data).enter().append('g')
+    .attr('transform', (_,i) => `translate(${x0(i)},0)`);
+
+  groups.selectAll('rect')
+    .data(d => keys.map((k,i) => ({ key: k, val: d[k], idx: i, d })))
+    .enter().append('rect')
+    .attr('x', d => x1(d.idx))
+    .attr('y', d => y(d.val))
+    .attr('width', x1.bandwidth())
+    .attr('height', d => iH - y(d.val))
+    .attr('rx', 3)
+    .attr('fill', d => colors[d.idx])
+    .attr('opacity', d => d.idx === 0 ? 1 : 0.65)
+    .on('mousemove', (event, d) => {
+      tooltip.style.opacity = 1;
+      tooltip.style.left = event.clientX + 12 + 'px';
+      tooltip.style.top  = event.clientY - 10 + 'px';
+      tooltip.innerHTML  =
+        `<b>${labels[d.idx]}</b><br>CO₂: ${d.val}g<br>` +
+        `Prompt: ${d.d.prompt.substring(0,40)}...`;
+    })
+    .on('mouseleave', () => tooltip.style.opacity = 0);
+
+  // X axis — short labels
+  g.append('g').attr('class','axis')
+    .attr('transform', `translate(0,${iH})`)
+    .call(d3.axisBottom(x0)
+      .tickFormat(i => `Q${data[i].id}`))
+    .selectAll('text')
+    .attr('fill','#7b8099').attr('font-size','11px');
+
+  // Y axis
+  g.append('g').attr('class','axis')
+    .call(d3.axisLeft(y).ticks(4)
+      .tickFormat(d => d + 'g'));
+
+  // Legend
+  const leg = svg.append('g')
+    .attr('transform', `translate(${margin.left}, ${H - 18})`);
+  labels.forEach((lbl, i) => {
+    const gx = i * (iW / 4);
+    leg.append('rect').attr('x', gx).attr('y', 0)
+      .attr('width', 9).attr('height', 9).attr('rx', 2)
+      .attr('fill', colors[i]).attr('opacity', i===0?1:0.65);
+    leg.append('text').attr('x', gx+12).attr('y', 8)
+      .attr('fill','#7b8099').attr('font-size','10px').text(lbl);
+  });
+}
+
+// ── Donut chart ──────────────────────────────────────
+function renderDonut(q) {
+  const el = document.getElementById('donut-chart');
+  el.innerHTML = '';
+  if (!q) return;
+
+  const W = el.parentElement.clientWidth - 40;
+  const H = 220;
+  const R = Math.min(W, H) / 2 - 20;
+
+  const data = [
+    { label: 'Local',  val: q.co2_local_g,  color: '#1db954' },
+    { label: 'GPT-4o', val: q.co2_gpt4o_g - q.co2_local_g, color: '#ef4444' },
+  ];
+
+  const svg = d3.select('#donut-chart')
+    .attr('width', W).attr('height', H);
+  const g = svg.append('g')
+    .attr('transform', `translate(${W/2},${H/2})`);
+
+  const pie = d3.pie().value(d => d.val).sort(null);
+  const arc = d3.arc().innerRadius(R*0.58).outerRadius(R);
+
+  g.selectAll('path')
+    .data(pie(data)).enter().append('path')
+    .attr('d', arc)
+    .attr('fill', d => d.data.color)
+    .attr('opacity', (_, i) => i===0 ? 1 : 0.6)
+    .on('mousemove', (event, d) => {
+      tooltip.style.opacity = 1;
+      tooltip.style.left = event.clientX + 12 + 'px';
+      tooltip.style.top  = event.clientY - 10 + 'px';
+      tooltip.innerHTML = `<b>${d.data.label}</b><br>${d.data.val.toFixed(4)}g CO₂`;
+    })
+    .on('mouseleave', () => tooltip.style.opacity = 0);
+
+  // Centre label
+  g.append('text').attr('text-anchor','middle')
+    .attr('y', -8).attr('fill','#e8eaf0').attr('font-size','18px').attr('font-weight','600')
+    .text(q.co2_saved_g + 'g');
+  g.append('text').attr('text-anchor','middle')
+    .attr('y', 12).attr('fill','#7b8099').attr('font-size','11px')
+    .text('CO₂ saved');
+
+  // Legend
+  const legY = H/2 + R + 8;
+  [['Local', '#1db954'], ['Cloud overhead', '#ef4444']].forEach(([lbl, col], i) => {
+    const lx = i === 0 ? W/2 - 80 : W/2 + 8;
+    svg.append('rect').attr('x', lx).attr('y', legY)
+      .attr('width', 8).attr('height', 8).attr('rx', 2).attr('fill', col);
+    svg.append('text').attr('x', lx+11).attr('y', legY+8)
+      .attr('fill','#7b8099').attr('font-size','10px').text(lbl);
+  });
+}
+
+// ── History table ────────────────────────────────────
+function renderTable(queries) {
+  const tbody = document.getElementById('history-body');
+  tbody.innerHTML = '';
+  queries.forEach(q => {
+    const ts = new Date(q.timestamp).toLocaleString('en-IN', {
+      month:'short', day:'numeric',
+      hour:'2-digit', minute:'2-digit'
+    });
+    tbody.innerHTML += `
+      <tr>
+        <td>${q.id}</td>
+        <td><span class="model-tag">${q.model}</span></td>
+        <td class="prompt-cell" title="${q.prompt}">${q.prompt}</td>
+        <td>${q.tokens_generated}</td>
+        <td>${q.avg_watts}W</td>
+        <td>${q.watt_hours}</td>
+        <td class="local-val">${q.co2_local_g}g</td>
+        <td>${q.co2_gpt4o_g}g</td>
+        <td class="saved-val">+${q.co2_saved_g}g</td>
+        <td>${q.wall_time_s}s</td>
+        <td>${q.tokens_per_sec}</td>
+        <td>${ts}</td>
+      </tr>`;
+  });
+}
+
+// ── Run a query from the dashboard ──────────────────
+async function runQuery() {
+  const prompt = document.getElementById('prompt-input').value.trim();
+  const model  = document.getElementById('model-select').value;
+  if (!prompt) return;
+
+  const btn = document.getElementById('run-btn');
+  const msg = document.getElementById('status-msg');
+  btn.disabled = true;
+  msg.textContent = '⏳ Running query on your RTX 4050... this takes 10–30s';
+
+  try {
+    const res = await fetch(`${API}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, model })
+    });
+    const data = await res.json();
+    if (data.error) {
+      msg.textContent = '❌ ' + data.error;
+    } else {
+      msg.textContent =
+        `✅ Done! ${data.tokens} tokens · ${data.co2_local_g}g CO₂ local · saved ${data.co2_saved_g}g vs cloud`;
+      document.getElementById('prompt-input').value = '';
+      await loadAll();
+    }
+  } catch(e) {
+    msg.textContent = '❌ API error — is Flask running?';
+  }
+  btn.disabled = false;
+}
+
+// Enter key to run
+document.getElementById('prompt-input')
+  .addEventListener('keydown', e => { if (e.key === 'Enter') runQuery(); });
+
+// Auto-load on open
+loadAll();
+// Auto-refresh every 30 seconds
+setInterval(loadAll, 30000);
+</script>
+</body>
+</html>
