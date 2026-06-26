@@ -215,8 +215,7 @@ This project contributes real measurement data to the emerging field of **AI sus
 ## 👤 Author
 
 **Bramha Vinayak Gulavani**
-- 🎓 CSE (AI & ML) · VIT Pune · Class Representative
-- 🏆 CGPA 9.48 | Diploma IT — 93.7% aggregate
+- 🎓 CSE (AI & ML) · VIT Pune 
 - 💼 [LinkedIn](https://www.linkedin.com/in/bramha-vinayak-gulavani-31302a30b/)
 - 🌐 [Portfolio](https://bramhagulavani.vercel.app)
 - 🐙 [GitHub](https://github.com/bramhagulavani)
